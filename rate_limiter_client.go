@@ -1,11 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"sync"
 )
+
+type IpAddressesConfig struct {
+	IPAddresses []string `json:"ipAddresses"`
+}
 
 //SEQUENTIAL
 //func main() {
@@ -32,24 +39,39 @@ import (
 //		fmt.Println("Message:", string(body)) // Directly print the string body
 //	}
 //}
+func readIPConfig(filePath string) (*IpAddressesConfig, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	config := &IpAddressesConfig{}
+	if err := decoder.Decode(config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
 
 //CONCURRENT
 func main() {
-	// URL of the API endpoint
-	ipAddresses := []string{"192.168.1.1", "192.168.1.2",
-		"192.168.1.3", "192.168.1.1", "192.168.1.1", "192.168.1.2",
-		"192.168.1.3", "192.168.1.3", "192.168.1.3"}
+	config, err := readIPConfig("ip_config.json")
+	if err != nil {
+		log.Fatalf("Error reading config: %s", err)
+	}
 
-	var wg sync.WaitGroup // Use a WaitGroup to wait for all goroutines to finish
+	log.Println("Reached hit API")
 
-	for _, ipAddress := range ipAddresses {
-		wg.Add(1)            // Increment the WaitGroup counter
-		go func(ip string) { // Pass the current ipAddress to the goroutine
-			defer wg.Done() // Decrement the counter when the goroutine completes
-			// URL of the API endpoint
+	var wg sync.WaitGroup
+
+	for _, ipAddress := range config.IPAddresses {
+		wg.Add(1)
+		go func(ip string) {
+			defer wg.Done()
 			url := "http://localhost:8080/ping?ip=" + ip
 
-			// Make a GET request
 			resp, err := http.Get(url)
 			if err != nil {
 				fmt.Printf("Error for IP %s: %s\n", ip, err)
@@ -59,9 +81,9 @@ func main() {
 
 			body, _ := ioutil.ReadAll(resp.Body)
 			fmt.Println("Response for IP " + ip + ": " + resp.Status)
-			fmt.Println("Message:", string(body)) // Directly print the string body
-		}(ipAddress) // Pass the current ipAddress as an argument to the goroutine
+			fmt.Println("Message:", string(body))
+		}(ipAddress)
 	}
 
-	wg.Wait() // Wait for all goroutines to finish
+	wg.Wait()
 }

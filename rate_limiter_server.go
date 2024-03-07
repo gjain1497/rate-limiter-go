@@ -3,29 +3,20 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
-type (
-	MainConfig struct {
-		IPAddress []string
-	}
-)
-
-var (
-	MainCfg *MainConfig
-)
-
-var GetConfig = func() (*MainConfig, error) {
-	if MainCfg == nil {
-		return nil, errors.New("Config is empty")
-	}
-	return MainCfg, nil
+type Message struct {
+	Status string
+	Body   string
+}
+type IPRateLimitingMappingConfig struct {
+	IPLimits map[string][]int `json:"ipLimits"`
 }
 
 var redisClient *redis.Client
@@ -102,46 +93,14 @@ func main() {
 		Addr: "localhost:6379",
 	})
 
-	//limiter := NewTokenBucketRateLimiter(10, 2)
-
-	//userId := time.Now().GoString()
-	//for i := 1; i <= 40; i++ {
-	//	if limiter.Allow(userId) {
-	//		fmt.Printf("Request %d allowed\n", i)
-	//	} else {
-	//		fmt.Printf("Request %d rejected\n", i)
-	//	}
-	//	time.Sleep(100 * time.Millisecond)
-	//	if i > 30 {
-	//		time.Sleep(500 * time.Millisecond)
-	//	}
-	//}
-	//viper.SetConfigFile("config.yaml") // Assuming your config file is named config.yaml
-	//err := viper.ReadInConfig()
-	//if err != nil {
-	//	log.Fatalf("Error reading config file: %s", err)
-	//}
-	//
-	//ip1 := viper.GetStringSlice("IPAddress")[0]
-	//ip2 := viper.GetStringSlice("IPAddress")[1]
-	//ip3 := viper.GetStringSlice("IPAddress")[2]
-
 	http.Handle("/ping", rateLimiter(endpointHandler))
-
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Println("There was an error listening on port :8080", err)
 	}
-
-}
-
-type Message struct {
-	Status string
-	Body   string
 }
 
 func endpointHandler(writer http.ResponseWriter, request *http.Request) {
-	log.Println("endpointHandler ")
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	message := Message{
@@ -155,7 +114,6 @@ func endpointHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func rateLimiter(next func(w http.ResponseWriter, r *http.Request)) http.Handler {
-	log.Println("Reached in rateLimiter")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		//FOR GETTING ACTUAL IP ADDRESS IN PROD WE USE THIS
@@ -165,22 +123,52 @@ func rateLimiter(next func(w http.ResponseWriter, r *http.Request)) http.Handler
 		//	return
 		//}
 
+		config, err := readIPLateLimitingConfig("ip_rate_limit_mapping_config.json")
+		if err != nil {
+			log.Fatalf("Error reading config: %s", err)
+		}
+
 		//HERE WE ARE PASSING IP ADDRESS AS PARAMETERS
-		ip := r.URL.Query().Get("ip")
-		log.Println("ip passed is ", ip)
-		limiter := NewTokenBucketRateLimiter(3, 2)
-		if !limiter.Allow(ip) {
+		ipAddress := r.URL.Query().Get("ip")
+		var bucketSize int
+		var refillRate int
+
+		log.Println("ipAddress passed is ", ipAddress)
+		// Attempt to retrieve the rate limiting configuration for the specified IP address
+		if limits, ok := config.IPLimits[ipAddress]; ok && len(limits) == 2 {
+			bucketSize := limits[0]
+			refillRate := limits[1]
+			fmt.Printf("Found configuration for IP %s - Bucket Size: %d, Refill Rate: %d\n", ipAddress, bucketSize, refillRate)
+		} else {
+			fmt.Printf("Configuration for IP %s not found or is invalid.\n", ipAddress)
+		}
+		limiter := NewTokenBucketRateLimiter(bucketSize, refillRate)
+		if !limiter.Allow(ipAddress) {
 			log.Println("Reached here ")
 			message := Message{
 				Status: "Request Failed",
 				Body:   "The API is at capacity, try again later.",
 			}
-			log.Println("Reached message ", message)
-
 			w.WriteHeader(http.StatusTooManyRequests)
 			json.NewEncoder(w).Encode(&message)
 			return
 		}
 		next(w, r)
 	})
+}
+
+func readIPLateLimitingConfig(filePath string) (*IPRateLimitingMappingConfig, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	config := &IPRateLimitingMappingConfig{}
+	if err := decoder.Decode(config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
