@@ -64,9 +64,9 @@ func (limiter *TokenBucketRateLimiter) Allow(userId string) bool {
 		lastRefill = now
 
 		-- consumption logic
-		tokens = math.max(tokens - 1, 0)
+		tokens = math.max(tokens - 1, -1)
 
-		local ttl = 60 -- only for testing
+		local ttl = 600 -- only for testing
 		
 		local key = KEYS[1]
 		redis.log(redis.LOG_NOTICE, "Value of key: " .. key)
@@ -141,6 +141,7 @@ type Message struct {
 }
 
 func endpointHandler(writer http.ResponseWriter, request *http.Request) {
+	log.Println("endpointHandler ")
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	message := Message{
