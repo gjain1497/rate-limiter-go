@@ -64,9 +64,9 @@ func (limiter *TokenBucketRateLimiter) Allow(userId string) bool {
 		lastRefill = now
 
 		-- consumption logic
-		tokens = math.max(tokens - 1, -1)
+		tokens = math.max(tokens - 1, 0)
 
-		local ttl = 600 -- only for testing
+		local ttl = 60 -- only for testing
 		
 		local key = KEYS[1]
 		redis.log(redis.LOG_NOTICE, "Value of key: " .. key)
@@ -126,17 +126,13 @@ func main() {
 	//ip2 := viper.GetStringSlice("IPAddress")[1]
 	//ip3 := viper.GetStringSlice("IPAddress")[2]
 
-	log.Println("ip dekhlo mallu madrasi ", 123)
-	log.Println("ip2 dekhlo mallu madrasi ", 456)
-	log.Println("ip3 dekhlo mallu madrasi ", 789)
-	http.Handle("/ping", rateLimiter(endpointHandler, "123"))
-	http.Handle("/ping", rateLimiter(endpointHandler, "456"))
-	http.Handle("/ping", rateLimiter(endpointHandler, "789"))
+	http.Handle("/ping", rateLimiter(endpointHandler))
 
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Println("There was an error listening on port :8080", err)
 	}
+
 }
 
 type Message struct {
@@ -157,14 +153,28 @@ func endpointHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func rateLimiter(next func(w http.ResponseWriter, r *http.Request), ip string) http.Handler {
+func rateLimiter(next func(w http.ResponseWriter, r *http.Request)) http.Handler {
+	log.Println("Reached in rateLimiter")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		limiter := NewTokenBucketRateLimiter(6, 4)
+
+		//FOR GETTING ACTUAL IP ADDRESS IN PROD WE USE THIS
+		//ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		//if err != nil {
+		//	w.WriteHeader(http.StatusInternalServerError)
+		//	return
+		//}
+
+		//HERE WE ARE PASSING IP ADDRESS AS PARAMETERS
+		ip := r.URL.Query().Get("ip")
+		log.Println("ip passed is ", ip)
+		limiter := NewTokenBucketRateLimiter(3, 2)
 		if !limiter.Allow(ip) {
+			log.Println("Reached here ")
 			message := Message{
 				Status: "Request Failed",
 				Body:   "The API is at capacity, try again later.",
 			}
+			log.Println("Reached message ", message)
 
 			w.WriteHeader(http.StatusTooManyRequests)
 			json.NewEncoder(w).Encode(&message)
