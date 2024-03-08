@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 )
 
@@ -39,21 +37,6 @@ type IpAddressesConfig struct {
 //		fmt.Println("Message:", string(body)) // Directly print the string body
 //	}
 //}
-func readIPConfig(filePath string) (*IpAddressesConfig, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	config := &IpAddressesConfig{}
-	if err := decoder.Decode(config); err != nil {
-		return nil, err
-	}
-
-	return config, nil
-}
 
 //CONCURRENT
 func main() {
@@ -61,9 +44,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error reading config: %s", err)
 	}
-
-	log.Println("Reached hit API")
-
 	var wg sync.WaitGroup
 
 	for _, ipAddress := range config.IPAddresses {
