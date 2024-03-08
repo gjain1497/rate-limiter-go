@@ -18,6 +18,7 @@ func initiateRedisClient() {
 }
 
 func startServer() {
+	log.Println("Started Server")
 	http.Handle("/ping", rateLimiter(endpointHandler))
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func (limiter *TokenBucketRateLimiter) Allow(userId string) bool {
+func (limiter *TokenBucketRateLimiter) Allow(clientId string) bool {
 	script := `
 		local tokens = tonumber(redis.call("get", KEYS[1]))
 		local lastRefill = tonumber(redis.call("get", KEYS[2]))
@@ -40,9 +40,9 @@ func (limiter *TokenBucketRateLimiter) Allow(userId string) bool {
 			return tokens
 	`
 
-	userIdTokensKey := fmt.Sprintf("user_id.%s.tokens", userId)
+	userIdTokensKey := fmt.Sprintf("client_id.%s.tokens", clientId)
 	fmt.Println("key ", userIdTokensKey)
-	userIdLastRefillKey := fmt.Sprintf("user_id.%s.last_refill", userId)
+	userIdLastRefillKey := fmt.Sprintf("client_id.%s.last_refill", clientId)
 
 	cmd := redisClient.Eval(context.Background(), script,
 		[]string{userIdTokensKey, userIdLastRefillKey},
@@ -55,7 +55,7 @@ func (limiter *TokenBucketRateLimiter) Allow(userId string) bool {
 
 	tokenCount := cmd.Val().(int64)
 
-	fmt.Println("tokenCount for ip address", tokenCount, userId)
+	fmt.Sprintf("tokenCount for ip address %s is %d", clientId, tokenCount)
 
 	return tokenCount >= 0
 }
