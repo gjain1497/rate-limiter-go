@@ -1,7 +1,7 @@
 # rate-limiter-go
 rate-limiter-go
 
-Client will be sending requests to our end point server, but it will have to first go through the middleware rate limiter layer which will allow only send limited number of requests to the end server.
+Client will be sending requests to our end point server, but it will have to first go through the middleware rate limiter layer which will allow only limited number of requests to the end server.
 
 There are two options to hit the enpoint server, either we can send the requests sequentially or we can send concurrently.
 1) runSequentially() -> hits the rate limiter sequentially
