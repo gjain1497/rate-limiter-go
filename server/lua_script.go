@@ -37,7 +37,7 @@ func (limiter *TokenBucketRateLimiter) Allow(clientId string) bool {
 		redis.call("setex", KEYS[1], ttl, tokens)
 		redis.call("setex", KEYS[2], ttl, lastRefill)
 
-			return tokens
+			return {tokens, secondsElapsed, tokensToAdd}
 	`
 
 	userIdTokensKey := fmt.Sprintf("client_id.%s.tokens", clientId)
@@ -52,8 +52,39 @@ func (limiter *TokenBucketRateLimiter) Allow(clientId string) bool {
 		fmt.Println(cmd.Err().Error())
 		return false
 	}
+	// Parse the result into a []interface{}
+	result, err := cmd.Result()
+	if err != nil {
+		fmt.Println("Error parsing result:", err)
+		return false
+	}
 
-	tokenCount := cmd.Val().(int64)
+	// Parse the array returned by the Lua script
+	vals, ok := result.([]interface{})
+	if !ok || len(vals) != 3 {
+		fmt.Println("Invalid result format")
+		return false
+	}
+
+	tokenCount, ok := vals[0].(int64)
+	if !ok {
+		fmt.Println("Error parsing token count")
+		return false
+	}
+
+	secondsElapsed, ok := vals[1].(int64)
+	if !ok {
+		fmt.Println("Error parsing secondsElapsed")
+		return false
+	}
+
+	tokensToAdd, ok := vals[2].(int64)
+	if !ok {
+		fmt.Println("Error parsing tokensToAdd")
+		return false
+	}
+
+	fmt.Printf("Token count: %d, Time elapsed: %d, Tokens to be Added : %d\n", tokenCount, secondsElapsed, tokensToAdd)
 
 	fmt.Sprintf("tokenCount for ip address %s is %d", clientId, tokenCount)
 

@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type IpAddressesConfig struct {
@@ -12,7 +13,7 @@ type IpAddressesConfig struct {
 }
 
 //SEQUENTIAL
-func main() {
+func runSequentially() {
 	config, err := readIPConfig("ip_config.json")
 	if err != nil {
 		log.Fatalf("Error reading config: %s", err)
@@ -34,32 +35,35 @@ func main() {
 	}
 }
 
-//CONCURRENT
-//func main() {
-//	config, err := readIPConfig("ip_config.json")
-//	if err != nil {
-//		log.Fatalf("Error reading config: %s", err)
-//	}
-//	var wg sync.WaitGroup
-//
-//	for _, ipAddress := range config.IPAddresses {
-//		wg.Add(1)
-//		go func(ip string) {
-//			defer wg.Done()
-//			url := "http://localhost:8080/ping?ip=" + ip
-//
-//			resp, err := http.Get(url)
-//			if err != nil {
-//				fmt.Printf("Error for IP %s: %s\n", ip, err)
-//				return
-//			}
-//			defer resp.Body.Close()
-//
-//			body, _ := ioutil.ReadAll(resp.Body)
-//			fmt.Println("Response for IP " + ip + ": " + resp.Status)
-//			fmt.Println("Message:", string(body))
-//		}(ipAddress)
-//	}
-//
-//	wg.Wait()
-//}
+func runConcurrently() {
+	config, err := readIPConfig("ip_config.json")
+	if err != nil {
+		log.Fatalf("Error reading config: %s", err)
+	}
+	var wg sync.WaitGroup
+
+	for _, ipAddress := range config.IPAddresses {
+		wg.Add(1)
+		go func(ip string) {
+			defer wg.Done()
+			url := "http://localhost:8080/ping?ip=" + ip
+
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Printf("Error for IP %s: %s\n", ip, err)
+				return
+			}
+			defer resp.Body.Close()
+
+			body, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println("Response for IP " + ip + ": " + resp.Status)
+			fmt.Println("Message:", string(body))
+		}(ipAddress)
+	}
+
+	wg.Wait()
+}
+func main() {
+	//runSequentially()
+	runConcurrently()
+}
